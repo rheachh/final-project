@@ -1,0 +1,237 @@
+---
+title: "Effects of foreign aid in GDP and Inequality"
+author: "Rhea Chhachhi and Juliana Pyrrho"
+date: "Last updated on `r Sys.Date()`"
+output:
+  html_document:
+    toc: true
+    toc_depth: 2
+    toc_float: true
+    df_print: kable
+---
+
+
+
+# FOREIGN AID
+
+
+In order to further analyze the effectiveness of foreign aid as a development tool, we decided to focus on its relationship with world inequality and economic growth. 
+
+Some believe that foreign aid is an ineffective tool that harms developing countries by creating dependency, fostering corruption, and encouraging currency overvaluation (Easterly 2009 and Moyo 2010)[https://www.huffpost.com/entry/sachs-ironies-why-critics_b_207331]
+
+However, on the other hand, foreign aid is also believed to help developing countries escape poverty traps, improve faster and promote more economic diversification.
+
+
+```{r setup, echo=FALSE, message=FALSE, warning=FALSE, error=FALSE}
+# Installing Required Packages
+library(dplyr)
+library(tidyverse)
+library(readr)
+library(janitor)
+library(tidyr)
+library(leaflet)
+library(tmap)
+library(sf)
+library(plotly)
+
+# Importing Datasets 
+aidgiven = read_csv("aid_given.csv")
+aidreceived = read_csv("aid_received.csv")
+gini = read_csv("gini.csv")
+gdppercapita = read_csv("gdp_per_capita.csv")
+continents = read_csv("continents.csv")
+```
+
+## Measuring Foreign Aid
+
+```{r, echo= FALSE}
+# Tidying up and then joining with continents!
+aidreceived2 <- aidreceived %>% 
+  left_join(continents, by="country") %>% 
+  gather(key = "year", value = "totalreceived", -c(country, continent)) %>% 
+  filter(year>=1967, year<=2007)
+
+aidgiven2 <- aidgiven %>% 
+  left_join(continents, by="country") %>% 
+  gather(key = "year", value = "totalgiven", -c(country, continent)) %>% 
+  filter(year>=1967, year<=2007)
+```
+
+```{r, echo = FALSE, message=FALSE, error=FALSE, warning=FALSE}
+#With continents included without necessarily emrging with the gapminder package data, so that we get to keep all of our years! 
+
+#Joining aidgiven2 and aidreceived2
+aid_continents <- aidgiven2 %>% 
+  full_join(aidreceived2, by=c("year", "country", "continent")) %>%
+  mutate(year = as.numeric(year))
+
+totalaid_year <- aid_continents %>% 
+  select(continent, totalreceived, totalgiven, year) %>% 
+  group_by(continent, year) %>% 
+  summarise(given=sum(totalgiven, na.rm = TRUE), received=sum(totalreceived, na.rm = TRUE)) %>% 
+  arrange(continent)
+
+#Untidying the data so we can do the facet wrap as below
+totalaid_year2 <- totalaid_year %>% 
+  gather("given_or_received", "value", 3:4)
+
+# Facet
+ given_or_received.labs <- c("Given", "Received") 
+names(given_or_received.labs) <- c("given", "received")
+
+# VIZ 1
+ggplot(totalaid_year2, aes(x=year, y=value/1000000, color=continent)) +
+  geom_point() +
+  geom_line(lwd=.8) +
+  facet_wrap(~given_or_received)+
+  scale_color_brewer(palette="Set2") +
+  labs(title="Foreign aid by Continent", subtitle="Trends from 1967 to 2007", color="Continent", x="Year", y= "Aid, in millions of USD") +
+  theme_grey()
+ 
+```
+
+
+## Foreign Aid and Economic Growth
+By using GDP as a measure for economic growth, we are measuring the impact of aid on the market value of final goods and services produced in each country in a given time period. 
+
+It is important to note that financial inflows such as international aid generally do not impact the GDP directly. However, it can importantly affect the GDP indirectly through public investments, consumption levels rising and exports. 
+
+
+```{r, echo = FALSE, message=FALSE, error=FALSE, warning=FALSE}
+#Tidying up the gdp per capita data!
+gdp <- gdppercapita %>% 
+  left_join(continents, by="country") %>% 
+  gather(key = "year", value = "gdppercapita", -c(country, continent)) %>% 
+  filter(year>=1967, year<=2007) %>% 
+  mutate(year = as.numeric(year))
+
+#Now join with aid data
+gdp_aid <- aid_continents %>% 
+  full_join(gdp, by=c("year", "country", "continent"))
+
+#Creating average aid received and average gdp so we can create a linegraph comparison to see if aid had correlation with gdp? Focus on Africa?
+gdp_aid_year <- gdp_aid %>% 
+  select(continent, gdppercapita, totalreceived, year) %>% 
+  group_by(continent, year) %>% 
+  summarise(mean_gdp=mean(gdppercapita, na.rm = TRUE), mean_aid=mean(totalreceived, na.rm = TRUE)) %>% 
+
+  arrange(continent)
+
+
+#Making a variable (gdp or aid) so that we can use that to facet wrap in our ggplot below
+gdp_aid_year2 <- gdp_aid_year %>% 
+  gather("gdp_or_aid", "value", 3:4)
+
+ggplot(gdp_aid_year2, aes(x=year, y=(value), color=continent))+
+  geom_point() +
+  geom_line(lwd=.8) +
+  facet_wrap(~gdp_or_aid, scales = "free_y") +
+  scale_color_brewer(palette="Set2") +
+  labs(title="Average GDP per capita and  foreign aid received, by continent", subtitle="In US $", color="Continent", x="Year", y= "Mean GDP per capita, in US $")
+```
+
+
+
+The drop in aid received, helps identify the impact. For example, the gradual drop to Oceania, results in an increase in GDP towards the end. 
+
+Between 1980 and 1990, the amount of mean aid given to Asia declined. Observing this drop, the GDP also declined during this time. After which, however the aid levels fluctuated and the Asia’s GDP mostly increased. 
+The overall drop in aid in Africa from 1990 to 2000, seemed to have no impact on the GDP of Africa since it relatively stayed constant with a slight increase towards the beginning of 2000. 
+
+Europe’s GDP seems to have a positive trend overall, since 1967, regardless of the GDP. However, the continent tends to have more developed countries, and fewer previously colonized countries, thus giving aid more frequently than receiving. 
+
+Hence aid’s effect on GDP is difficult to determine, since depends on each continent, and the institutions that may exist in different economies.
+
+
+## Aid and Inequality
+
+In order to examine the effect of foreign assistance on income inequality and poverty reduction, we decided to directly compare the gini coefficients of world regions in 1967 and 2007.
+
+```{r, echo = FALSE}
+# Tidying Gini
+gini2 <- gini %>% 
+  left_join(continents, by = "country") %>% 
+  gather(key = year, value = "gini", -c(country, continent)) %>% 
+  filter(year >= 1967, year <= 2007)
+
+# Filtering first and last years of data on year so that we can do two maps
+gini1967 <- gini %>% 
+  left_join(continents, by="country") %>% 
+  gather(key = "year", value = "gini", -c(country, continent)) %>% 
+  filter(year==1967)
+
+gini2007 <- gini %>% 
+  left_join(continents, by="country") %>% 
+  gather(key = "year", value = "gini", -c(country, continent)) %>% 
+  filter(year==2007)
+
+```
+
+```{r, echo = FALSE}
+##### VIZ: MAPS #####
+
+map.world <- map_data("world")
+
+# Joining Gini data to the world map 
+
+#For the year 1967:
+map.world_joined_1967 <- left_join(map.world,
+                             gini1967, 
+                              by = c('region' = 'country'), na.rm = FALSE)
+
+#For the year 1967:
+map.world_joined_2007 <- left_join(map.world,
+                             gini2007, 
+                              by = c('region' = 'country'), na.rm = FALSE)
+
+
+# Plotting Maps
+
+# 1967 static map:
+m1 = 
+  ggplot() +
+  geom_polygon(data = map.world_joined_1967, aes(x = long, y = lat, group = group, fill = gini))  + 
+  # Changing color gradient (so higher gini is darker)
+  scale_fill_gradient(high = "#132B43", low = "#56B1F7", name="Gini") +
+  # Minimalistic theme so the map is less cluttered
+  theme(axis.text=element_blank(),
+        axis.ticks=element_blank(),
+        axis.title=element_blank(),
+        panel.grid.major=element_blank(),
+        panel.background=element_blank()) +
+  # Titles
+  labs( title = "World Gini Index in 1967", fill = "Gini Index", subtitle = "Based on Gapminder Data, 1967") 
+
+# 2007 static map:
+m2 = 
+  ggplot() +
+  geom_polygon(data = map.world_joined_2007, aes(x = long, y = lat, group = group, fill = gini)) +
+  # Changing color gradient (so higher gini is darker)
+  scale_fill_gradient(high = "#132B43", low = "#56B1F7", name="Gini") +  
+  # Minimalistic theme so the map is less cluttered
+  theme(axis.text=element_blank(),
+        axis.ticks=element_blank(),
+        axis.title=element_blank(),
+        panel.grid.major=element_blank(),
+        panel.background=element_blank()) +
+  # Titles
+  labs( title = "World Gini Index in 2007", fill = "Gini Index", subtitle = "Based on Gapminder Data, 2007") 
+
+# Final interactive maps [1967 vs 2007 World Gini]
+
+plotly::ggplotly(m1)
+
+plotly::ggplotly(m2)
+```
+
+
+
+As observed above, apart from South America, continents received more aid in 2007 compared to 1967. Additionally, taking the aid received into account over the years, we hypothesize that the aid affected the gini coefficient in each continent. 
+From the maps, in South America, Brazil’s GDP shows an increase (47.4 to 54.9). 
+Russia and China’s gini coefficients almost double in 2007. While, several countries in Europe have lower gini coefficients. 
+
+In Africa, South Africa shows a decline in gini coefficient (68.4 to 63.9), suggesting improvement in income distribution. However, Namibia is darker (higher gini in 2007) . Overall, the continent seems lighter blue (suggesting less inequality) in 2007. 
+
+In Asia, most countries show lower gini coefficients. However, there are increases in India, China and Japan. A few countries such as North Korea remain the same. 
+
+Hence, in the two continents that received the most foreign assistance, there is evidence of slightly lower gini coefficients in the countries. Hence, there is weak evidence that assistance is beneficial to the gini coefficients. 
+

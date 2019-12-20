@@ -1,0 +1,85 @@
+---
+title: "Effects of Foreign Aid in GDP and Inequality"
+author: "Juliana Pyrrho and Rhea Chhachhi"
+date: "Last updated on `r Sys.Date()`"
+output:
+  html_document:
+    toc: true
+    toc_depth: 2
+    toc_float: true
+    df_print: kable
+---
+
+
+
+
+## Foreign Aid and GDP
+
+Foreign aid is an important source of income to many low and middle income countries around the world. These funds, sent by developed nations in the form of grants, humanitarian aid, conditional loans or direct investments, are intended to help in the development of these countries. Using data provided by Gapminder [https://www.gapminder.org], we measured the amount of bilateral foreign aid given and received by countries to find specific patterns over time. Furthermore, we also measured average GDP per capita of the continents in order to check the effectiveness of aid on the income per capita of the continents. We expected to find that higher levels of foreign aid received is associated to higher levels of GDP over time, which would indicate that billions of dollars of aid is helping these countries develop.
+
+```{r, setup, echo=FALSE, message=FALSE, warning=FALSE, error=FALSE}
+library(tidyverse)
+
+# Importing Data
+aidgiven = read_csv("aid_given.csv")
+aidreceived = read_csv("aid_received.csv")
+gdppercapita = read_csv("gdp_per_capita.csv")
+continents = read_csv("continents.csv")
+
+```
+
+```{r, echo=FALSE, message=FALSE, warning=FALSE, error=FALSE}
+#Tidying up and then joining with continents!
+aidreceived2 <- aidreceived %>% 
+  left_join(continents, by="country") %>% 
+  gather(key = "year", value = "totalreceived", -c(country, continent)) %>% 
+  filter(year>=1967, year<=2007)
+
+aidgiven2 <- aidgiven %>% 
+  left_join(continents, by="country") %>% 
+  gather(key = "year", value = "totalgiven", -c(country, continent)) %>% 
+  filter(year>=1967, year<=2007)
+
+#Joining aidgiven and aidreceived
+aid_continents <- aidgiven2 %>% 
+  full_join(aidreceived2, by=c("year", "country", "continent")) %>%
+  mutate(year = as.numeric(year))
+```
+
+```{r, echo=FALSE, warning=FALSE}
+#Tidying up the gdp per capita data!
+gdp <- gdppercapita %>% 
+  left_join(continents, by="country") %>% 
+  gather(key = "year", value = "gdppercapita", -c(country, continent)) %>% 
+  filter(year>=1967, year<=2007) %>% 
+  mutate(year = as.numeric(year))
+
+#Now join with aid data
+gdp_aid <- aid_continents %>% 
+  full_join(gdp, by=c("year", "country", "continent"))
+
+#Creating average aid received and average gdp so we can create a linegraph comparison to see if aid had correlation with gdp? Focus on Africa?
+gdp_aid_year <- gdp_aid %>% 
+  select(continent, gdppercapita, totalreceived, year) %>% 
+  group_by(continent, year) %>% 
+  summarise(mean_gdp=mean(gdppercapita, na.rm = TRUE), mean_aid=mean(totalreceived, na.rm = TRUE)) %>% 
+
+  arrange(continent)
+
+
+#Making a variable (gdp or aid) so that we can use that to facet wrap in our ggplot below
+gdp_aid_year2 <- gdp_aid_year %>% 
+  gather("gdp_or_aid", "value", 3:4)
+
+ggplot(gdp_aid_year2, aes(x=year, y=(value), color=continent))+
+  geom_point() +
+  geom_line(lwd=.8) +
+  facet_wrap(~gdp_or_aid, scales = "free_y") +
+  scale_color_brewer(palette="Set2") +
+  labs(title="Average GDP per capita and Foreign aid received, by continent", subtitle="In US $", color="Continent", x="Year", y= "Mean GDP per capita, in US $") + labs(caption = "Based on Gapminder Data (1967 - 2007") +
+  theme_gray()
+```
+
+By looking at the graph above, we see that the initial hypothesis that aid is a strong factor in increasing development, here measured by economic growth, does not hold. Europe, for example, has had a steep increase in its economic indicator although it was the main donor of aid over time.  We do see that Asia, which was one of the main recipients of aid over time, has an average GDP per capita in 2007 that is more double than its original value in 1967. The African continent, unfortunately, does not follow the same pattern as, despite receiving billions of dollars of aid, still has incredibly low GDP per capita overall and bad levels on other welfare and development indicators (not shown above). Thus, foreign aid is not, empirically, as effective as people might have expected, although we can't dismiss it for its effects on the economic indicators of a nation.
+
+
